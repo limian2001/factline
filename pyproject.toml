@@ -15,7 +15,12 @@ dependencies = [
     "structlog>=24.1",
 ]
 
-[project.optional-dependencies]
+# PEP 735 dependency group, not an optional-dependencies extra, on purpose:
+# uv installs the `dev` group by default for `uv run` and `uv sync`, so the dev
+# tools are simply there. As an extra they needed --all-extras on every command,
+# and forgetting it fails with a bare "Failed to spawn: ruff".
+# The deploy uses `uv sync --no-dev`, which then genuinely excludes these.
+[dependency-groups]
 dev = [
     "pytest>=8.2",
     "pytest-cov>=5.0",

@@ -20,7 +20,7 @@ jobs:
       # --frozen fails the build if uv.lock is out of date with pyproject.toml,
       # so a dependency can never change without the lockfile change being reviewed.
       - name: Install (locked)
-        run: uv sync --frozen --all-extras
+        run: uv sync --frozen
 
       - name: Lint
         run: |

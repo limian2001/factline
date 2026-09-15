@@ -37,7 +37,12 @@ class EdgarClient:
                 # The SEC requires a contact header and returns 403 without it.
                 "User-Agent": settings.sec_user_agent,
                 "Accept-Encoding": "gzip, deflate",
-                "Host": "data.sec.gov",
+                # No Host header here on purpose. This client talks to two hosts:
+                # data.sec.gov for the XBRL APIs and www.sec.gov for the ticker
+                # map. Pinning Host to either one makes requests to the other
+                # return 404, because the server resolves the path against the
+                # Host it was given rather than the host we connected to.
+                # httpx derives Host from each URL, which is what we want.
             },
             rate_limit_rps=settings.sec_rate_limit_rps,
             cache=DiskCache(settings.cache_dir, settings.cache_ttl_hours),

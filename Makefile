@@ -3,8 +3,8 @@
 help:
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 
-install:  ## create the venv and install from uv.lock
-	uv sync --frozen --all-extras
+install:  ## create the venv and install from uv.lock (dev tools included)
+	uv sync --frozen
 
 lock:  ## regenerate uv.lock after changing pyproject.toml
 	uv lock
