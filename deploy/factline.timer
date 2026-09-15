@@ -1,0 +1,22 @@
+# When the pipeline runs.
+#
+# 23:00 UTC on weekdays = 19:00 ET, after the US close and after most 10-Q/8-K
+# filings have hit EDGAR. Times are UTC on purpose: the box stays on UTC so the
+# schedule never shifts under daylight saving.
+#
+# Persistent=true means a run missed because the instance was stopped fires once
+# on the next boot, instead of silently skipping a day.
+
+[Unit]
+Description=Run the factline pipeline on weekday evenings
+Requires=factline.service
+
+[Timer]
+OnCalendar=Mon-Fri 23:00 UTC
+Persistent=true
+# Avoids hammering EDGAR at exactly :00 alongside every other scheduled job.
+RandomizedDelaySec=300
+Unit=factline.service
+
+[Install]
+WantedBy=timers.target

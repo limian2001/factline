@@ -1,0 +1,38 @@
+# Systemd unit for the daily pipeline run.
+#
+# Type=oneshot, not a long-running daemon: this is a batch job. The timer unit
+# (factline.timer) decides when it runs; this file only says what "running" means.
+#
+# flock makes concurrent runs impossible. The deploy script takes the same lock,
+# so a deploy can never swap the code out from under a running pipeline.
+
+[Unit]
+Description=factline daily ingest and report build
+Documentation=https://github.com/limian2001/factline
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=factline
+Group=factline
+WorkingDirectory=/opt/factline
+
+# Secrets live in /opt/factline/.env (chmod 600), which pydantic-settings reads
+# from WorkingDirectory. Deliberately NOT EnvironmentFile= — one mechanism, not two.
+ExecStart=/usr/bin/flock --exclusive --wait 1800 /var/lock/factline.lock /opt/factline/deploy/run-pipeline.sh
+
+TimeoutStartSec=3600
+StandardOutput=journal
+StandardError=journal
+
+# Least privilege. The job only ever needs to write its own data directory.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+# read-only rather than hidden: git and uv both live under the service user's home.
+ProtectHome=read-only
+ReadWritePaths=/opt/factline/data /var/lock
+
+[Install]
+WantedBy=multi-user.target

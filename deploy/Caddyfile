@@ -1,0 +1,30 @@
+# Serves the generated reports and the status page.
+#
+# Caddy over nginx for one reason: automatic TLS. Point a domain at the box,
+# swap :80 for the hostname below, and certificates are handled with no cron job
+# and no certbot to forget about.
+
+:80 {
+	root * /opt/factline/data/site
+	file_server browse
+	encode gzip
+
+	# The status endpoint the pipeline writes after every run.
+	handle /health.json {
+		header Cache-Control "no-store"
+		file_server
+	}
+
+	log {
+		output file /var/log/caddy/factline.log
+	}
+}
+
+# Once a domain points here, delete the :80 block above and use this instead —
+# TLS is then issued and renewed automatically.
+#
+# reports.yourdomain.com {
+# 	root * /opt/factline/data/site
+# 	file_server browse
+# 	encode gzip
+# }

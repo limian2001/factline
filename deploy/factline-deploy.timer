@@ -1,0 +1,18 @@
+# How often the box looks for a new commit.
+#
+# Three minutes is responsive enough that a merge feels like CD, and light
+# enough that it is a rounding error on GitHub's side: a git fetch on an
+# unchanged branch transfers almost nothing, and the API is only called when
+# the SHA has actually moved.
+
+[Unit]
+Description=Check for a new factline release every few minutes
+Requires=factline-deploy.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=3min
+Unit=factline-deploy.service
+
+[Install]
+WantedBy=timers.target

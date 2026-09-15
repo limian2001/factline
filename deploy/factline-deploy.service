@@ -1,0 +1,25 @@
+# Checks GitHub for a new green commit and deploys it. See pull-deploy.sh.
+
+[Unit]
+Description=factline pull-based self-deploy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=factline
+Group=factline
+WorkingDirectory=/opt/factline
+ExecStart=/opt/factline/deploy/pull-deploy.sh
+TimeoutStartSec=900
+StandardOutput=journal
+StandardError=journal
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/opt/factline /var/lock
+
+[Install]
+WantedBy=multi-user.target

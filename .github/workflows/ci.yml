@@ -1,0 +1,37 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: lint + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # --frozen fails the build if uv.lock is out of date with pyproject.toml,
+      # so a dependency can never change without the lockfile change being reviewed.
+      - name: Install (locked)
+        run: uv sync --frozen --all-extras
+
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      # Tests use recorded fixtures and never touch the network: CI must not
+      # depend on the SEC being up, and must never eat into our rate limit.
+      - name: Test
+        run: uv run pytest -v --cov=factline --cov-report=term-missing
+
+  # There is no deploy job on purpose. The EC2 box polls this repo every three
+  # minutes and deploys any commit this workflow has gone green on, so CD needs
+  # no credentials here and no inbound SSH there. See docs/DEPLOY.md.
