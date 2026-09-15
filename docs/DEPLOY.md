@@ -212,3 +212,24 @@ weeknight, that is not a cost.
 - **Private repo would need one token.** The status-API call and `git fetch` are
   anonymous today because the repo is public. A private repo needs a read-only
   PAT in a file on the box — still nothing stored in GitHub.
+
+---
+
+## 10 · 一个命令看全状态
+
+```bash
+/opt/factline/deploy/status.sh
+```
+
+定时器活着吗、自部署上次检查是几秒前、本地和远端差几个 commit、远端 CI 什么颜色、
+数据有多新、数据湖里有几个 ticker —— 一次全告诉你。
+
+存在的理由:自部署在无事可做时是静默的(否则日志每 3 分钟一行),
+而静默让「闲着」和「死了」在日志里长得一模一样。
+另外 `journalctl -f` 只显示你敲命令之后的新日志,看不到过去,所以干等是最差的排查方式。
+
+idle 心跳记在 syslog 的 debug 级别,平时不占屏幕,要看时:
+
+```bash
+sudo journalctl -u factline-deploy.service -p debug -n 30 --no-pager
+```

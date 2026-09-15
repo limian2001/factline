@@ -10,16 +10,16 @@ REPO="https://github.com/${GH_USER}/factline.git"
 APP=/opt/factline
 SVC_USER=factline
 
-echo "==> [1/7] system packages"
+echo "==> [1/8] system packages"
 sudo apt-get update -qq
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
   git curl ca-certificates debian-keyring debian-archive-keyring apt-transport-https
 
-echo "==> [2/7] UTC clock"
+echo "==> [2/8] UTC clock"
 # The systemd timer is written in UTC so the schedule never shifts under DST.
 sudo timedatectl set-timezone UTC
 
-echo "==> [3/7] service user"
+echo "==> [3/8] service user"
 # No login shell and no password: nothing ever signs in as this account. It
 # exists only for systemd to run the pipeline and the self-deploy as, which is
 # why the deploy needs no SSH access from outside at all.
@@ -28,7 +28,7 @@ if ! id -u "$SVC_USER" >/dev/null 2>&1; then
     --shell /usr/sbin/nologin "$SVC_USER"
 fi
 
-echo "==> [4/7] caddy"
+echo "==> [4/8] caddy"
 if ! command -v caddy >/dev/null 2>&1; then
   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
     | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
@@ -38,7 +38,7 @@ if ! command -v caddy >/dev/null 2>&1; then
   sudo apt-get install -y -qq caddy
 fi
 
-echo "==> [5/7] checkout"
+echo "==> [5/8] checkout"
 sudo mkdir -p "$APP" /var/log/caddy
 sudo chown "$SVC_USER:$SVC_USER" "$APP"
 if [ ! -d "$APP/.git" ]; then
@@ -48,7 +48,7 @@ else
 fi
 sudo -u "$SVC_USER" mkdir -p "$APP/data/site"
 
-echo "==> [6/7] uv (installed for the service user, which is what systemd runs as)"
+echo "==> [6/8] uv (installed for the service user, which is what systemd runs as)"
 if ! sudo -u "$SVC_USER" test -x /home/$SVC_USER/.local/bin/uv; then
   sudo -u "$SVC_USER" bash -c 'curl -LsSf https://astral.sh/uv/install.sh | sh' >/dev/null
 fi

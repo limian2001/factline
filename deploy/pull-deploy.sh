@@ -14,25 +14,32 @@ BRANCH=main
 
 cd "$APP"
 
+# A heartbeat that survives log rotation and needs no journal access to read.
+mkdir -p "$APP/data"
+date -u +%Y-%m-%dT%H:%M:%SZ > "$APP/data/.deploy-last-check"
+
 git fetch --quiet origin "$BRANCH"
 local_sha=$(git rev-parse HEAD)
 remote_sha=$(git rev-parse "origin/$BRANCH")
 
 if [ "$local_sha" = "$remote_sha" ]; then
-  exit 0   # up to date, nothing to say
+  # Logged at syslog debug priority (the <7> prefix), so `journalctl` hides it
+  # by default and `journalctl -p debug` shows it. Total silence was worse: it
+  # made "the timer is idle" indistinguishable from "the timer is dead".
+  echo "<7>deploy.idle up to date at ${local_sha:0:8}"
+  exit 0
 fi
 
 echo "deploy.candidate local=${local_sha:0:8} remote=${remote_sha:0:8}"
 
-# Only ever deploy a commit CI has gone green on. Without this check the box
-# would happily deploy a commit whose tests are still running -- or failing.
-# Anonymous call; works because the repo is public.
-state=$(
-  curl -fsS --max-time 20 \
-    -H "Accept: application/vnd.github+json" \
-    "https://api.github.com/repos/${REPO_SLUG}/commits/${remote_sha}/status" \
-  | python3 -c 'import json,sys; print(json.load(sys.stdin).get("state","unknown"))'
-) || state="unreachable"
+# Only ever deploy a commit CI has gone green on. Without this the box would
+# happily deploy a commit whose tests are still running -- or failing.
+#
+# ci_state.py queries the Checks API. It must not be swapped for the commit
+# Status API (/commits/{sha}/status): GitHub Actions writes check runs and never
+# writes commit statuses, so that endpoint answers "pending" forever and the
+# deploy silently never fires. That was a real bug here.
+state=$("$APP/deploy/ci_state.py" "$remote_sha" 2>/dev/null || echo unreachable)
 
 case "$state" in
   success)
@@ -42,8 +49,20 @@ case "$state" in
     echo "deploy.waiting ci still running on ${remote_sha:0:8}"
     exit 0
     ;;
+  none)
+    echo "deploy.no_checks no ci runs found for ${remote_sha:0:8}; not deploying" >&2
+    exit 0
+    ;;
+  unreachable)
+    echo "deploy.ci_unreachable could not read ci state for ${remote_sha:0:8}" >&2
+    exit 0
+    ;;
+  failed:*)
+    echo "deploy.blocked ci red on ${remote_sha:0:8} -> ${state#failed:}" >&2
+    exit 0
+    ;;
   *)
-    echo "deploy.blocked ci state=$state on ${remote_sha:0:8}" >&2
+    echo "deploy.blocked unexpected ci state '$state' on ${remote_sha:0:8}" >&2
     exit 0
     ;;
 esac
