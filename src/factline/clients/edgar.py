@@ -17,6 +17,7 @@ from pydantic import ValidationError
 from factline.clients.base import DiskCache, JSONAPIClient
 from factline.config import Settings
 from factline.models.edgar import (
+    OUT_OF_SCOPE_TAXONOMIES,
     CompanyFactsParseResult,
     FactRow,
     QuarantinedRecord,
@@ -106,6 +107,17 @@ class EdgarClient:
         )
 
         for taxonomy, tags in (payload.get("facts") or {}).items():
+            # Skip out-of-scope taxonomies before validation, so they are counted
+            # as "not our subject matter" rather than reported as errors.
+            if taxonomy in OUT_OF_SCOPE_TAXONOMIES:
+                skipped = sum(
+                    len((body or {}).get("units", {}).get(unit) or [])
+                    for body in (tags or {}).values()
+                    for unit in ((body or {}).get("units") or {})
+                )
+                result.out_of_scope[taxonomy] = result.out_of_scope.get(taxonomy, 0) + skipped
+                continue
+
             for tag, tag_body in (tags or {}).items():
                 for unit, observations in ((tag_body or {}).get("units") or {}).items():
                     for obs in observations or []:
@@ -145,6 +157,8 @@ class EdgarClient:
             "edgar.parsed",
             ticker=ticker,
             accepted=result.accepted_count,
+            forward_looking=result.forward_looking_count,
+            out_of_scope=result.out_of_scope_count,
             quarantined=len(result.quarantined),
             quarantine_rate=round(result.quarantine_rate, 5),
         )

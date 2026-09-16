@@ -63,3 +63,37 @@ def test_as_of_is_monotonic_in_information(settings, companyfacts):
         for d in (date(2024, 1, 1), date(2024, 6, 1), date(2025, 1, 1), date(2026, 1, 1))
     ]
     assert counts == sorted(counts), f"information went backwards: {counts}"
+
+
+def test_forward_looking_fact_is_visible_from_its_filing_date(settings, companyfacts):
+    """A forecast becomes public when it is FILED, not when its period ends.
+
+    The FY2024 10-K (filed 2024-11-01) discloses debt maturing by 2025-09-27.
+    An analyst on 2024-12-01 could act on that number, so an as-of query for
+    that date must return it -- keying visibility off the period end instead
+    would hide a year of real, actionable disclosure.
+    """
+    lake = build_lake(settings, companyfacts)
+    tag = "LongTermDebtMaturitiesRepaymentsOfPrincipalInNextTwelveMonths"
+
+    before_filing = lake.facts_as_of("AAPL", date(2024, 10, 1), tag=tag)
+    assert before_filing == [], "not yet filed, so not yet knowable"
+
+    after_filing = lake.facts_as_of("AAPL", date(2024, 12, 1), tag=tag)
+    assert len(after_filing) == 1
+    assert after_filing[0][4] == 10912000000
+
+    # ...and it is still visible after the period it forecasts has elapsed.
+    assert len(lake.facts_as_of("AAPL", date(2026, 1, 1), tag=tag)) == 1
+
+
+def test_forward_looking_rows_are_separable_in_sql(settings, companyfacts):
+    """Most metrics must exclude forecasts; the flag makes that a one-line filter."""
+    lake = build_lake(settings, companyfacts)
+
+    total = lake.sql("SELECT COUNT(*) FROM facts")[0][0]
+    actuals = lake.sql("SELECT COUNT(*) FROM facts WHERE NOT is_forward_looking")[0][0]
+    forecasts = lake.sql("SELECT COUNT(*) FROM facts WHERE is_forward_looking")[0][0]
+
+    assert forecasts == 1
+    assert actuals + forecasts == total

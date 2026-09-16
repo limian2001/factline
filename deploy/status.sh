@@ -50,17 +50,27 @@ result=$(systemctl show factline-deploy.service -p Result --value 2>/dev/null)
 
 # ----------------------------------------------------------------- commits
 bold "代码版本"
-local_sha=$(git -C "$APP" rev-parse --short HEAD 2>/dev/null || echo "?")
-git -C "$APP" fetch --quiet origin "$BRANCH" 2>/dev/null
-remote_sha=$(git -C "$APP" rev-parse --short "origin/$BRANCH" 2>/dev/null || echo "?")
+# -c safe.directory: the repo is owned by the `factline` service account, so git
+# refuses to touch it ("dubious ownership") when this script is run by anyone
+# else -- which is normally, since you operate the box as `ubuntu`. Scoping the
+# exemption to this one invocation beats telling people to run the status tool
+# under sudo, and beats a global config change.
+GIT=(git -c "safe.directory=$APP" -C "$APP")
 
-dim "本地 : $local_sha  $(git -C "$APP" log -1 --format=%s 2>/dev/null | cut -c1-48)"
+git_err=$("${GIT[@]}" rev-parse --short HEAD 2>&1 >/dev/null) || true
+local_sha=$("${GIT[@]}" rev-parse --short HEAD 2>/dev/null || echo "?")
+"${GIT[@]}" fetch --quiet origin "$BRANCH" 2>/dev/null || true
+remote_sha=$("${GIT[@]}" rev-parse --short "origin/$BRANCH" 2>/dev/null || echo "?")
+
+dim "本地 : $local_sha  $("${GIT[@]}" log -1 --format=%s 2>/dev/null | cut -c1-48)"
 dim "远端 : $remote_sha"
 
 if [ "$local_sha" = "?" ] || [ "$remote_sha" = "?" ]; then
-  # Never report "all good" from state we could not actually read. A status tool
-  # that says fine when it is blind is worse than no status tool at all.
-  bad "读不到版本信息 —— /opt/factline 不是 git 仓库,或者取不到远端"
+  # Never report "all good" from state we could not actually read, and never
+  # swallow the reason -- the first version of this printed a bare "?" and cost
+  # a round of guessing.
+  bad "读不到版本信息"
+  [ -n "$git_err" ] && dim "git 说: $git_err"
 elif [ "$local_sha" = "$remote_sha" ]; then
   ok "已是最新"
 else

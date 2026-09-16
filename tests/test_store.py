@@ -46,4 +46,5 @@ def test_coverage_report(settings, companyfacts):
     ticker, count, tags, earliest, latest, latest_filing = rows[0]
     assert ticker == "AAPL"
     assert count == parsed.accepted_count
-    assert tags == 3  # Revenues, Assets, EntityCommonStockSharesOutstanding
+    # Revenues, Assets, LongTermDebtMaturities...NextTwelveMonths, and the dei tag.
+    assert tags == 4

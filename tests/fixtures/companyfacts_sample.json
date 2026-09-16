@@ -37,14 +37,26 @@
           ]
         }
       },
-      "BrokenFiledBeforePeriodEnd": {
-        "label": "Deliberately corrupt row",
+      "LongTermDebtMaturitiesRepaymentsOfPrincipalInNextTwelveMonths": {
+        "label": "Forward-looking: debt maturing in the next twelve months",
         "units": {
           "USD": [
             {
-              "start": "2024-01-01", "end": "2024-12-31", "val": 1000,
+              "end": "2025-09-27", "val": 10912000000,
+              "accn": "0000320193-24-000123", "fy": 2024, "fp": "FY",
+              "form": "10-K", "filed": "2024-11-01"
+            }
+          ]
+        }
+      },
+      "CorruptPeriodStartsAfterItEnds": {
+        "label": "Genuinely corrupt: period ends before it begins",
+        "units": {
+          "USD": [
+            {
+              "start": "2024-12-31", "end": "2024-01-01", "val": 1000,
               "accn": "0000000000-24-000001", "fy": 2024, "fp": "FY",
-              "form": "10-K", "filed": "2024-06-30"
+              "form": "10-K", "filed": "2025-02-01"
             }
           ]
         }
@@ -52,12 +64,42 @@
     },
     "made-up-taxonomy": {
       "SomeConcept": {
-        "label": "Unknown taxonomy should be quarantined",
+        "label": "Unknown taxonomy should be quarantined, not silently skipped",
         "units": {
           "USD": [
             {
               "end": "2024-09-28", "val": 42,
               "accn": "0000000000-24-000002", "form": "10-K", "filed": "2024-11-01"
+            }
+          ]
+        }
+      }
+    },
+    "ffd": {
+      "NetFeeAmt": {
+        "label": "Filing fee — out of scope, not an error",
+        "units": {
+          "USD": [
+            {
+              "end": "2026-04-28", "val": 586351.69,
+              "accn": "0001193125-26-187795", "form": "424B2", "filed": "2026-04-29"
+            },
+            {
+              "end": "2026-05-06", "val": 1450658.91,
+              "accn": "0001193125-26-212210", "form": "424B2", "filed": "2026-05-07"
+            }
+          ]
+        }
+      }
+    },
+    "ecd": {
+      "CoSelectedMeasureAmt": {
+        "label": "Pay-versus-performance — out of scope, not an error",
+        "units": {
+          "pure": [
+            {
+              "start": "2021-01-01", "end": "2021-12-31", "val": 0.23,
+              "accn": "0000019617-26-000096", "form": "DEF 14A", "filed": "2026-04-07"
             }
           ]
         }

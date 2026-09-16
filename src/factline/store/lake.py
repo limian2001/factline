@@ -39,6 +39,7 @@ FACT_SCHEMA = pa.schema(
         ("fy", pa.int32()),
         ("fp", pa.string()),
         ("frame", pa.string()),
+        ("is_forward_looking", pa.bool_()),
     ]
 )
 

@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from factline.config import load_settings
+from factline.quality import TickerCoverage, check_coverage
 from factline.store.lake import FactLake
 from factline.universe import TICKERS
 
@@ -52,17 +53,30 @@ def ingest(
     table.add_column("Ticker")
     table.add_column("CIK", justify="right")
     table.add_column("Facts", justify="right")
-    table.add_column("Quarantined", justify="right")
+    table.add_column("Forward", justify="right")
+    table.add_column("Out of scope", justify="right")
+    table.add_column("Errors", justify="right")
     table.add_column("Status")
     for o in outcomes:
+        # Errors are highlighted only above 1%: below that it is normal EDGAR
+        # noise, and colouring it red trains you to ignore the column.
+        err = f"{o.quarantined:,}" + (f" ({o.quarantine_rate:.2%})" if o.quarantined else "")
+        if o.quarantine_rate > 0.01:
+            err = f"[yellow]{err}[/]"
         table.add_row(
             o.ticker,
             str(o.cik) if o.cik > 0 else "—",
             f"{o.accepted:,}",
-            f"{o.quarantined:,}" + (f" ({o.quarantine_rate:.2%})" if o.quarantined else ""),
+            f"{o.forward_looking:,}" if o.forward_looking else "—",
+            f"[dim]{o.out_of_scope:,}[/]" if o.out_of_scope else "—",
+            err,
             "[green]ok[/]" if o.ok else f"[red]{o.error or 'failed'}[/]",
         )
     console.print(table)
+    console.print(
+        "[dim]Out of scope = real SEC taxonomies that are not fundamentals "
+        "(ffd filing fees, ecd executive pay). Skipped, not errors.[/]"
+    )
 
     failed = [o for o in outcomes if not o.ok]
     if failed:
@@ -79,9 +93,29 @@ def coverage() -> None:
     table = Table(title="Lake coverage", header_style="bold")
     for col in ("Ticker", "Rows", "Tags", "Earliest", "Latest period", "Latest filing"):
         table.add_column(col, justify="right" if col != "Ticker" else "left")
-    for row in lake.coverage():
+    rows = lake.coverage()
+    for row in rows:
         table.add_row(row[0], f"{row[1]:,}", f"{row[2]:,}", str(row[3]), str(row[4]), str(row[5]))
     console.print(table)
+
+    # The coverage check runs here rather than in a separate command nobody
+    # remembers to run: a check you have to invoke deliberately is a check that
+    # is not protecting you.
+    findings = check_coverage(
+        [
+            TickerCoverage(ticker=r[0], rows=r[1], tags=r[2], earliest=r[3], latest=r[4])
+            for r in rows
+        ]
+    )
+    if findings:
+        console.print(
+            "\n[yellow]Coverage warnings[/] — every record was valid, "
+            "but these tickers do not look like their peers:"
+        )
+        for f in findings:
+            console.print(f"  [yellow]•[/] {f}")
+    else:
+        console.print("\n[green]Coverage check passed[/] — no outliers against peers.")
 
 
 @app.command("as-of")

@@ -29,3 +29,47 @@ def test_universe_covers_offset_fiscal_years():
     assert len(TICKERS) == 15
     assert len(set(TICKERS)) == 15
     assert len(OFFSET_FISCAL_YEAR_TICKERS) >= 4
+
+
+# --- pinned CIKs -----------------------------------------------------------
+# These exist because resolving tickers at runtime silently analysed the wrong
+# company: XOM maps to a 2024 reorganisation entity with ~2 years of filings.
+
+
+def test_every_holding_has_a_pinned_cik():
+    from factline.universe import UNIVERSE
+
+    assert all(h.cik > 0 for h in UNIVERSE)
+    assert len({h.cik for h in UNIVERSE}) == len(UNIVERSE), "duplicate CIK"
+
+
+def test_xom_is_pinned_to_the_operating_company_not_the_holding_shell():
+    from factline.universe import BY_TICKER
+
+    xom = BY_TICKER["XOM"]
+    assert xom.cik == 34088, "Exxon Mobil Corporation, twenty years of filings"
+    assert xom.cik != 2115436, "ExxonMobil Holdings Corporation, the 2024 shell"
+    assert xom.pin_note, "a deliberate divergence must carry its reason"
+
+
+def test_cik_drift_is_detected_not_silently_followed():
+    from factline.universe import check_cik_drift
+
+    # The live ticker map today: XOM points at the holding company.
+    warnings = check_cik_drift({"XOM": 2115436, "AAPL": 320193})
+    assert len(warnings) == 1
+    assert "XOM" in warnings[0]
+    assert "2115436" in warnings[0] and "34088" in warnings[0]
+    assert "Holdings" in warnings[0], "the pin note should travel with the warning"
+
+
+def test_agreeing_map_produces_no_warnings():
+    from factline.universe import UNIVERSE, check_cik_drift
+
+    assert check_cik_drift({h.ticker: h.cik for h in UNIVERSE}) == []
+
+
+def test_unknown_tickers_in_the_map_are_ignored():
+    from factline.universe import check_cik_drift
+
+    assert check_cik_drift({"TSLA": 1318605}) == []
