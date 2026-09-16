@@ -6,13 +6,28 @@ validation rule while describing the wrong company.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from factline.quality import CoverageFinding, TickerCoverage, check_coverage
 
 
-def cov(ticker, rows, earliest=date(2006, 12, 31), latest=date(2026, 6, 30), tags=500):
-    return TickerCoverage(ticker=ticker, rows=rows, tags=tags, earliest=earliest, latest=latest)
+def cov(
+    ticker,
+    rows,
+    earliest=date(2006, 12, 31),
+    latest=date(2026, 6, 30),
+    tags=500,
+    latest_filing=None,
+):
+    return TickerCoverage(
+        ticker=ticker,
+        rows=rows,
+        tags=tags,
+        earliest=earliest,
+        latest=latest,
+        # Filings land a few weeks after the period they cover.
+        latest_filing=latest_filing or (latest + timedelta(days=30)),
+    )
 
 
 def healthy_peers():
@@ -82,3 +97,37 @@ def test_too_few_peers_reports_rather_than_returning_all_clear():
 def test_finding_renders_readably():
     f = CoverageFinding(ticker="XOM", kind="too_few_facts", detail="269 facts vs 33,232")
     assert str(f).startswith("XOM: ")
+
+
+# --- staleness ------------------------------------------------------------
+# Added after the fix for one problem created another: pinning XOM to the
+# predecessor CIK recovered twenty years of history and lost the last four
+# months, because that entity stopped filing after the reorganisation. Volume
+# and depth both looked healthy, so neither check saw it.
+
+
+def test_catches_an_entity_that_stopped_filing():
+    peers = healthy_peers()
+    peers.append(cov("XOM", 20_594, latest=date(2026, 3, 31), tags=440))
+
+    findings = check_coverage(peers)
+    kinds = {(f.ticker, f.kind) for f in findings}
+
+    assert ("XOM", "stale_filings") in kinds
+    # The point of the test: volume and depth are fine, only currency is wrong.
+    assert ("XOM", "too_few_facts") not in kinds
+    assert ("XOM", "too_little_history") not in kinds
+
+
+def test_normal_reporting_lag_is_tolerated():
+    """Filers report on different calendars; a few weeks apart is not a problem."""
+    peers = healthy_peers()
+    peers.append(cov("SLOW", 30_000, latest=date(2026, 5, 15)))  # ~6 weeks behind
+    assert check_coverage(peers) == []
+
+
+def test_being_ahead_of_peers_is_never_flagged():
+    """An early filer is not a data problem."""
+    peers = healthy_peers()
+    peers.append(cov("FAST", 30_000, latest=date(2026, 8, 31)))
+    assert check_coverage(peers) == []

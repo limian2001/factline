@@ -117,3 +117,4 @@ laptop ──push──▶ GitHub ──lint + test──▶ green
 
 Data and metric foundation complete and tested. Report generation, the eval
 harness and the cost ledger are next.
+

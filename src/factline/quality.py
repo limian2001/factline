@@ -26,6 +26,18 @@ from statistics import median
 MIN_SHARE_OF_MEDIAN_FACTS = 0.10
 MIN_SHARE_OF_MEDIAN_HISTORY = 0.25
 
+# How far behind its peers a ticker's most recent FILING may fall before it is
+# suspicious. Deliberately measured on the filing date, not the period end: a
+# slow filer has an old period but a recent filing, whereas an entity that has
+# stopped filing has neither -- and only the second is a coverage problem.
+#
+# Quarterly filers file roughly every 90 days, so being more than ~75 days
+# behind the peer median means a whole reporting period is missing. That is what
+# happens to a predecessor CIK after a holding-company reorganisation: the
+# history stays complete and abundant, it simply stops. Volume and depth checks
+# are both blind to it.
+MAX_FILING_LAG_DAYS_VS_MEDIAN = 75
+
 
 @dataclass(frozen=True)
 class CoverageFinding:
@@ -43,7 +55,12 @@ class TickerCoverage:
     rows: int
     tags: int
     earliest: date
+    # Latest period the data covers -- used for history depth.
     latest: date
+    # Latest date anything was actually filed -- used for staleness. These are
+    # different questions and conflating them hides a dead entity behind a
+    # merely late one.
+    latest_filing: date
 
     @property
     def history_days(self) -> int:
@@ -66,6 +83,7 @@ def check_coverage(coverage: list[TickerCoverage]) -> list[CoverageFinding]:
     findings: list[CoverageFinding] = []
     median_rows = median(c.rows for c in coverage)
     median_history = median(c.history_days for c in coverage)
+    median_filing = median(c.latest_filing.toordinal() for c in coverage)
 
     for c in coverage:
         if c.rows < median_rows * MIN_SHARE_OF_MEDIAN_FACTS:
@@ -77,6 +95,21 @@ def check_coverage(coverage: list[TickerCoverage]) -> list[CoverageFinding]:
                         f"{c.rows:,} facts vs peer median {median_rows:,.0f} "
                         f"({c.rows / median_rows:.1%}) — likely the wrong entity, "
                         "e.g. a reorganisation shell rather than the operating company"
+                    ),
+                )
+            )
+
+        lag = median_filing - c.latest_filing.toordinal()
+        if lag > MAX_FILING_LAG_DAYS_VS_MEDIAN:
+            findings.append(
+                CoverageFinding(
+                    ticker=c.ticker,
+                    kind="stale_filings",
+                    detail=(
+                        f"last filed {c.latest_filing}, {lag} days behind the peer "
+                        "median — a reporting period is missing, so this entity may "
+                        "have stopped filing (e.g. a predecessor CIK after a "
+                        "reorganisation)"
                     ),
                 )
             )

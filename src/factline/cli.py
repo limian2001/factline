@@ -103,7 +103,14 @@ def coverage() -> None:
     # is not protecting you.
     findings = check_coverage(
         [
-            TickerCoverage(ticker=r[0], rows=r[1], tags=r[2], earliest=r[3], latest=r[4])
+            TickerCoverage(
+                ticker=r[0],
+                rows=r[1],
+                tags=r[2],
+                earliest=r[3],
+                latest=r[4],
+                latest_filing=r[5],
+            )
             for r in rows
         ]
     )
@@ -116,6 +123,71 @@ def coverage() -> None:
             console.print(f"  [yellow]•[/] {f}")
     else:
         console.print("\n[green]Coverage check passed[/] — no outliers against peers.")
+
+
+@app.command()
+def resolve(
+    ticker: list[str] = typer.Argument(..., help="One or more tickers, e.g. TSLA AVGO"),
+) -> None:
+    """Look up what to put in universe.py for a ticker, and warn if it looks wrong.
+
+    Adding a name means pasting one line into UNIVERSE, and that line needs a
+    CIK. This does the lookup -- and checks the entity's filing history while it
+    is there, because the cheapest moment to catch "this ticker now points at a
+    reorganisation shell" is before ingesting 20,000 facts from the wrong
+    company, not after.
+    """
+    from factline.clients.edgar import EdgarClient
+
+    settings = load_settings()
+    client = EdgarClient(settings)
+    try:
+        for raw in ticker:
+            t = raw.upper()
+            console.print()
+            try:
+                cik = client.ticker_to_cik(t)
+            except KeyError:
+                console.print(f"  [red]{t}[/] not in the SEC ticker map")
+                continue
+
+            sub = client.fetch_submissions(cik)
+            recent = sub.get("filings", {}).get("recent", {})
+            dates = sorted(recent.get("filingDate") or [])
+            fye_raw = str(sub.get("fiscalYearEnd") or "")
+            fye = f"{fye_raw[:2]}-{fye_raw[2:]}" if len(fye_raw) == 4 else "??-??"
+
+            console.print(f"  [bold]{t}[/]  {sub.get('name', '?')}")
+            console.print(f"  {'CIK':<17}{cik}")
+            console.print(f"  {'Fiscal year end':<17}{fye}")
+            console.print(f"  {'SIC':<17}{sub.get('sic', '?')} {sub.get('sicDescription', '')}")
+            if dates:
+                span = (date.fromisoformat(dates[-1]) - date.fromisoformat(dates[0])).days
+                console.print(
+                    f"  {'Filings':<17}{len(dates):,} "
+                    f"(earliest {dates[0]}, latest {dates[-1]}, {span / 365:.1f}y)"
+                )
+
+                # The XOM check, applied at the boundary instead of after the fact.
+                if span < 365 * 5:
+                    console.print(
+                        f"\n  [yellow]This entity has only {span / 365:.1f}y of filing "
+                        "history.[/] It may be a post-reorganisation holding company, "
+                        "with the operating history under a predecessor CIK. Check "
+                        f"[dim]https://www.sec.gov/cgi-bin/browse-edgar?company="
+                        f"{sub.get('name', '').split()[0]}&action=getcompany[/] "
+                        "before adding it."
+                    )
+            else:
+                console.print(f"  [yellow]{'Filings':<17}none found[/]")
+
+            console.print(
+                f'\n  [dim]Holding("{t}", {cik}, "{sub.get("name", "")}", '
+                f'"TODO-sector", "{fye}"),[/]'
+            )
+        console.print()
+    finally:
+        client.close()
 
 
 @app.command("as-of")

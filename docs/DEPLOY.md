@@ -233,3 +233,30 @@ idle 心跳记在 syslog 的 debug 级别,平时不占屏幕,要看时:
 ```bash
 sudo journalctl -u factline-deploy.service -p debug -n 30 --no-pager
 ```
+
+---
+
+## 11 · 「它拉到最新代码了吗、跑过了吗」
+
+```bash
+/opt/factline/deploy/version.sh
+```
+
+```
+  远端 main   f65b0d8   fix(data): 三桶分类事实、保留前瞻性披露      (2 分钟前)
+  已部署      f65b0d8   代码是最新的
+  跑过的版本  6c9c081   旧代码 —— 新版部署了但还没跑过              (2026-09-15T18:51:56Z)
+              想立刻用新代码跑一次: sudo systemctl start factline.service
+```
+
+三行,因为这是三个不同的问题 —— 而混淆后两个会让人以为改动生效了:
+
+| 行 | 来自 | 回答 |
+|---|---|---|
+| 远端 main | `git rev-parse origin/main` | GitHub 上最新的是什么 |
+| 已部署 | `git rev-parse HEAD` | 磁盘上 checkout 的是什么 |
+| 跑过的版本 | `health.json` 的 `git_sha` | **上次真正执行的是什么** |
+
+自部署几分钟内就会让第二行追上第一行,但第三行要等流水线下一次运行(23:00 UTC)才会动。
+所以改了代码之后 `version.sh` 显示「代码是最新的」+「旧代码」是**正常状态**,不是故障。
+要立刻验证新代码能跑,就手动触发一次。
